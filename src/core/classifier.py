@@ -2,6 +2,7 @@ import re
 from enum import Enum
 from typing import Any, Dict, List
 
+
 class Domain(str, Enum):
     CODE = "code"
     JSON = "json"
