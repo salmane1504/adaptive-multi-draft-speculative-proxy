@@ -1,6 +1,7 @@
 from collections import deque
-from pydantic import BaseModel
 from typing import Any, Dict, Optional
+
+from pydantic import BaseModel
 
 from src.core.classifier import Domain, PromptClassifier
 
@@ -31,7 +32,7 @@ class DomainStats:
 
     def _adjust_k(self):
         alpha = self.acceptance_rate
-        if alpha >= 0.65:
+        if alpha >= 0.6:
             self.current_k = min(self.current_k + 1, 8)  # Cap max depth at 8
         elif alpha < 0.35:
             self.current_k = max(self.current_k - 1, 0)  # Lower depth or disable if overhead > benefit
@@ -43,9 +44,9 @@ class DynamicRouter:
         
         # Domain -> Draft Model mappings (Tokenizer family must match target!)
         self.draft_registry = {
-            Domain.CODE: "qwen2.5-coder-0.5b",
-            Domain.JSON: "qwen2.5-0.5b-instruct",
-            Domain.PROSE: "qwen2.5-0.5b-instruct",
+            Domain.CODE: "qwen2.5-coder:0.5b",
+            Domain.JSON: "qwen2.5:0.5b",
+            Domain.PROSE: "qwen2.5:0.5b",
         }
         
         # Performance trackers per domain

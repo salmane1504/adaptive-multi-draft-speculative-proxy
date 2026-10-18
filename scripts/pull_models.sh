@@ -34,3 +34,7 @@ done
 
 echo "=== All models pulled successfully! ==="
 echo "You can verify them by running: ollama list"
+echo
+echo "Start the Ollama daemon with these settings so verification requests run in parallel:"
+echo "  OLLAMA_NUM_PARALLEL=9 OLLAMA_MAX_LOADED_MODELS=3 ollama serve"
+echo "(NUM_PARALLEL must be >= max K + 1; the router caps K at 8.)"
