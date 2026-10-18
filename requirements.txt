@@ -1,4 +1,5 @@
 pydantic
+httpx>=0.27
 pytest>=8.0
 ruff>=0.11.0
 mypy>=1.15.0

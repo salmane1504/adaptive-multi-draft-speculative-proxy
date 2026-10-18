@@ -22,19 +22,19 @@ def router():
 				]
 			},
 			Domain.CODE,
-			"qwen2.5-coder-0.5b",
+			"qwen2.5-coder:0.5b",
 			5,
 		),
 		(
 			{"response_format": {"type": "json_object"}, "messages": []},
 			Domain.JSON,
-			"qwen2.5-0.5b-instruct",
+			"qwen2.5:0.5b",
 			6,
 		),
 		(
 			{"messages": [{"role": "user", "content": "Explain the seasons."}]},
 			Domain.PROSE,
-			"qwen2.5-0.5b-instruct",
+			"qwen2.5:0.5b",
 			3,
 		),
 	],
