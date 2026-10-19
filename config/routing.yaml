@@ -1,0 +1,13 @@
+# Draft models must share the target's tokenizer family; initial_k is capped at 8.
+target_model: "qwen2.5:14b"
+
+domains:
+  code:
+    draft_model: "qwen2.5-coder:0.5b"
+    initial_k: 5
+  json:
+    draft_model: "qwen2.5:0.5b"
+    initial_k: 6
+  prose:
+    draft_model: "qwen2.5:0.5b"
+    initial_k: 3
