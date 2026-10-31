@@ -1,40 +1,21 @@
 #!/usr/bin/env bash
 set -e
 
-echo "=== Pulling Required Ollama Models ==="
+# Pre-download the MLX models listed in config/routing.yaml into the Hugging Face
+# cache so the server starts quickly. Requires Apple Silicon.
+PYTHON="${PYTHON:-.venv/bin/python}"
+CONFIG="${ROUTING_CONFIG:-config/routing.yaml}"
 
-# 1. Check if Ollama is installed and running
-if ! command -v ollama &> /dev/null; then
-    echo "Error: Ollama is not installed or not in PATH."
-    echo "Please install Ollama from https://ollama.com"
-    exit 1
-fi
+"$PYTHON" - "$CONFIG" <<'EOF'
+import sys
 
-if ! curl -s http://localhost:11434/api/tags > /dev/null; then
-    echo "Error: Ollama daemon is not running."
-    echo "Please start it by running 'ollama serve' in another terminal."
-    exit 1
-fi
+import yaml
+from huggingface_hub import snapshot_download
 
-# 2. Define the exact model tags required by the proxy's routing table
-# Target Model
-TARGET_MODEL="qwen2.5:14b"
-
-# Draft Models
-DRAFT_CODE="qwen2.5-coder:0.5b"
-DRAFT_PROSE="qwen2.5:0.5b"
-
-MODELS=("$TARGET_MODEL" "$DRAFT_CODE" "$DRAFT_PROSE")
-
-# 3. Pull each model
-for MODEL in "${MODELS[@]}"; do
-    echo "Pulling $MODEL..."
-    ollama pull "$MODEL"
-done
-
-echo "=== All models pulled successfully! ==="
-echo "You can verify them by running: ollama list"
-echo
-echo "Start the Ollama daemon with these settings so verification requests run in parallel:"
-echo "  OLLAMA_NUM_PARALLEL=9 OLLAMA_MAX_LOADED_MODELS=3 ollama serve"
-echo "(NUM_PARALLEL must be >= max K + 1; the router caps K at 8.)"
+cfg = yaml.safe_load(open(sys.argv[1]))
+models = [cfg["target_model"], *sorted({d["draft_model"] for d in cfg["domains"].values()})]
+for model in models:
+    print(f"Pulling {model}...")
+    snapshot_download(model)
+print("All models are in ~/.cache/huggingface/hub")
+EOF

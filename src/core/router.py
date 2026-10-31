@@ -1,7 +1,9 @@
 from collections import deque
+from pathlib import Path
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel
+import yaml
+from pydantic import BaseModel, Field, model_validator
 
 from src.core.classifier import Domain, PromptClassifier
 
@@ -12,6 +14,25 @@ class RouteConfig(BaseModel):
     draft_model: Optional[str]
     k_drafts: int
     bypass_speculation: bool
+
+class DomainSettings(BaseModel):
+    draft_model: str
+    initial_k: int = Field(ge=0, le=8)
+
+class RoutingSettings(BaseModel):
+    target_model: str
+    domains: dict[Domain, DomainSettings]
+
+    @model_validator(mode="after")
+    def _all_domains_present(self) -> "RoutingSettings":
+        missing = set(Domain) - set(self.domains)
+        if missing:
+            raise ValueError(f"routing config missing domains: {sorted(d.value for d in missing)}")
+        return self
+
+    @classmethod
+    def from_file(cls, path: str | Path) -> "RoutingSettings":
+        return cls.model_validate(yaml.safe_load(Path(path).read_text()))
 
 class DomainStats:
     def __init__(self, window_size: int = 50, initial_k: int = 5):
@@ -38,23 +59,33 @@ class DomainStats:
             self.current_k = max(self.current_k - 1, 0)  # Lower depth or disable if overhead > benefit
 
 class DynamicRouter:
-    def __init__(self, target_model: str):
+    def __init__(
+        self,
+        target_model: str,
+        draft_registry: Optional[Dict[Domain, str]] = None,
+        initial_k: Optional[Dict[Domain, int]] = None,
+    ):
         self.target_model = target_model
         self.classifier = PromptClassifier()
         
         # Domain -> Draft Model mappings (Tokenizer family must match target!)
-        self.draft_registry = {
-            Domain.CODE: "qwen2.5-coder:0.5b",
-            Domain.JSON: "qwen2.5:0.5b",
-            Domain.PROSE: "qwen2.5:0.5b",
+        self.draft_registry = draft_registry or {
+            Domain.CODE: "mlx-community/Qwen2.5-Coder-0.5B-Instruct-8bit",
+            Domain.JSON: "mlx-community/Qwen2.5-0.5B-Instruct-8bit",
+            Domain.PROSE: "mlx-community/Qwen2.5-0.5B-Instruct-8bit",
         }
         
         # Performance trackers per domain
-        self.stats = {
-            Domain.CODE: DomainStats(initial_k=5),
-            Domain.JSON: DomainStats(initial_k=6),
-            Domain.PROSE: DomainStats(initial_k=3),
-        }
+        k = initial_k or {Domain.CODE: 5, Domain.JSON: 6, Domain.PROSE: 3}
+        self.stats = {domain: DomainStats(initial_k=k[domain]) for domain in Domain}
+
+    @classmethod
+    def from_settings(cls, settings: RoutingSettings) -> "DynamicRouter":
+        return cls(
+            settings.target_model,
+            draft_registry={d: s.draft_model for d, s in settings.domains.items()},
+            initial_k={d: s.initial_k for d, s in settings.domains.items()},
+        )
 
     def route(self, payload: Dict[str, Any]) -> RouteConfig:
         domain = self.classifier.classify(payload)
