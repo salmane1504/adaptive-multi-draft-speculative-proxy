@@ -1,13 +1,13 @@
-# Draft models must share the target's tokenizer family; initial_k is capped at 8.
-target_model: "qwen2.5:14b"
+# MLX models from Hugging Face. Drafts must share the target's tokenizer; initial_k is capped at 8.
+target_model: "mlx-community/Qwen2.5-14B-Instruct-4bit"
 
 domains:
   code:
-    draft_model: "qwen2.5-coder:0.5b"
+    draft_model: "mlx-community/Qwen2.5-Coder-0.5B-Instruct-8bit"
     initial_k: 5
   json:
-    draft_model: "qwen2.5:0.5b"
+    draft_model: "mlx-community/Qwen2.5-0.5B-Instruct-8bit"
     initial_k: 6
   prose:
-    draft_model: "qwen2.5:0.5b"
+    draft_model: "mlx-community/Qwen2.5-0.5B-Instruct-8bit"
     initial_k: 3

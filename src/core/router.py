@@ -70,9 +70,9 @@ class DynamicRouter:
         
         # Domain -> Draft Model mappings (Tokenizer family must match target!)
         self.draft_registry = draft_registry or {
-            Domain.CODE: "qwen2.5-coder:0.5b",
-            Domain.JSON: "qwen2.5:0.5b",
-            Domain.PROSE: "qwen2.5:0.5b",
+            Domain.CODE: "mlx-community/Qwen2.5-Coder-0.5B-Instruct-8bit",
+            Domain.JSON: "mlx-community/Qwen2.5-0.5B-Instruct-8bit",
+            Domain.PROSE: "mlx-community/Qwen2.5-0.5B-Instruct-8bit",
         }
         
         # Performance trackers per domain

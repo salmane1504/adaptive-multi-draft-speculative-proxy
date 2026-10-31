@@ -1,75 +1,56 @@
-import math
-import random
-from dataclasses import dataclass
+from typing import cast
 
-TokenDist = dict[str, float]
+import mlx.core as mx
 
 
-def tempered_dist(logprobs: dict[str, float], temperature: float) -> TokenDist:
-    """Softmax(logprob / T) renormalised over the observed top-N support."""
-    if not logprobs:
-        return {}
+def to_probs(logits: mx.array, temperature: float) -> mx.array:
+    """softmax(logits / T) over the last axis; one-hot argmax when T == 0."""
+    logits = logits.astype(mx.float32)
     if temperature <= 0:
-        best = max(logprobs, key=logprobs.__getitem__)
-        return {best: 1.0}
-    scaled = {tok: lp / temperature for tok, lp in logprobs.items()}
-    peak = max(scaled.values())
-    weights = {tok: math.exp(s - peak) for tok, s in scaled.items()}
-    total = sum(weights.values())
-    return {tok: w / total for tok, w in weights.items()}
+        best = mx.argmax(logits, axis=-1, keepdims=True)
+        return (mx.arange(logits.shape[-1]) == best).astype(mx.float32)
+    return mx.softmax(logits / temperature, axis=-1)
 
 
-def sample(dist: TokenDist, rng: random.Random) -> str:
-    total = sum(dist.values())
-    if total <= 0:
-        raise ValueError("cannot sample from an empty distribution")
-    threshold = rng.random() * total
-    cumulative = 0.0
-    for tok, prob in dist.items():
-        cumulative += prob
-        if cumulative >= threshold:
-            return tok
-    return next(reversed(dist))
+def sample(probs: mx.array) -> mx.array:
+    return mx.random.categorical(mx.log(probs))
 
 
-@dataclass(frozen=True)
-class VerificationResult:
-    tokens: list[str]  # accepted draft prefix + one target-sampled token
-    num_accepted: int
+def _pad_vocab(a: mx.array, b: mx.array) -> tuple[mx.array, mx.array]:
+    # Models of one family can differ in embedding padding (e.g. 151936 vs 152064).
+    size = max(a.shape[-1], b.shape[-1])
+    return (
+        mx.pad(a, [(0, 0), (0, size - a.shape[-1])]),
+        mx.pad(b, [(0, 0), (0, size - b.shape[-1])]),
+    )
 
 
 def verify(
-    draft_tokens: list[str],
-    draft_dists: list[TokenDist],
-    target_dists: list[TokenDist],
-    rng: random.Random,
-) -> VerificationResult:
+    draft_tokens: mx.array, draft_probs: mx.array, target_probs: mx.array
+) -> tuple[int, int]:
     """Leviathan/Chen speculative rejection sampling.
 
-    target_dists[i] is p(. | prefix + draft[:i]); it has one extra entry used
-    to sample the bonus token when every draft token is accepted.
+    draft_probs[i] is q(. | prefix + draft[:i]) and target_probs[i] is p(. | same);
+    target_probs has one extra row for the bonus token when every draft is accepted.
+    Returns (number of accepted draft tokens, the token that follows them).
     """
-    if len(draft_dists) != len(draft_tokens):
-        raise ValueError("draft_dists must align with draft_tokens")
-    if len(target_dists) != len(draft_tokens) + 1:
-        raise ValueError("target_dists must have len(draft_tokens) + 1 entries")
+    n = draft_tokens.size
+    if draft_probs.shape[0] != n:
+        raise ValueError("draft_probs must align with draft_tokens")
+    if target_probs.shape[0] != n + 1:
+        raise ValueError("target_probs must have len(draft_tokens) + 1 rows")
 
-    out: list[str] = []
-    for i, tok in enumerate(draft_tokens):
-        p = target_dists[i].get(tok, 0.0)
-        q = draft_dists[i].get(tok, 0.0)
-        if q > 0 and rng.random() < min(1.0, p / q):
-            out.append(tok)
-            continue
+    q, p = _pad_vocab(draft_probs, target_probs)
+    rows = mx.arange(n)
+    p_tok = p[rows, draft_tokens]
+    q_tok = q[rows, draft_tokens]
+    # u < min(1, p/q)  <=>  u * q < p, since q > 0 for a token sampled from q.
+    accepted = cast(list[bool], (mx.random.uniform(shape=(n,)) * q_tok < p_tok).tolist())
+    num_accepted = next((i for i, ok in enumerate(accepted) if not ok), n)
 
-        residual = {
-            t: max(0.0, pt - draft_dists[i].get(t, 0.0))
-            for t, pt in target_dists[i].items()
-        }
-        if sum(residual.values()) <= 0:
-            residual = target_dists[i]
-        out.append(sample(residual, rng))
-        return VerificationResult(tokens=out, num_accepted=i)
-
-    out.append(sample(target_dists[-1], rng))
-    return VerificationResult(tokens=out, num_accepted=len(draft_tokens))
+    if num_accepted == n:
+        return n, cast(int, sample(p[n]).item())
+    residual = mx.maximum(p[num_accepted] - q[num_accepted], 0.0)
+    if cast(float, residual.sum().item()) <= 0:
+        residual = p[num_accepted]
+    return num_accepted, cast(int, sample(residual).item())

@@ -2,7 +2,6 @@ import time
 import uuid
 from typing import Annotated
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from src.api.schemas import (
@@ -44,18 +43,18 @@ async def chat_completions(
     if body.stream:
         raise HTTPException(status_code=400, detail="stream=true is not supported")
 
-    try:
-        result = await engine.generate(body.model_dump(exclude_none=True))
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=502, detail=f"Ollama request failed ({type(exc).__name__})"
-        ) from exc
+    result = await engine.generate(body.model_dump(exclude_none=True))
 
     return ChatCompletionResponse(
         id=f"chatcmpl-{uuid.uuid4().hex}",
         created=int(time.time()),
         model=engine.router.target_model,
-        choices=[Choice(message=ChatMessage(role="assistant", content=result.text))],
+        choices=[
+            Choice(
+                message=ChatMessage(role="assistant", content=result.text),
+                finish_reason=result.finish_reason,
+            )
+        ],
         speculative=SpeculativeInfo(
             domain=result.domain,
             draft_model=result.draft_model,

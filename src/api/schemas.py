@@ -23,7 +23,7 @@ class ChatCompletionRequest(BaseModel):
 class Choice(BaseModel):
     index: int = 0
     message: ChatMessage
-    finish_reason: Literal["stop"] = "stop"
+    finish_reason: Literal["stop", "length"] = "stop"
 
 
 class SpeculativeInfo(BaseModel):

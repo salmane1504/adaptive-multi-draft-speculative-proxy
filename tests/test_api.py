@@ -3,11 +3,11 @@ from fastapi.testclient import TestClient
 from src.api.main import create_app
 from src.core.engine import SpeculativeEngine
 from src.core.router import DynamicRouter, RoutingSettings
-from tests.test_engine import PROMPT, FakeClient
+from tests.test_engine import PROMPT, TEXT, FakeClient
 
 
 def make_client() -> TestClient:
-    engine = SpeculativeEngine(FakeClient(), DynamicRouter(target_model="target"), seed=0)
+    engine = SpeculativeEngine(FakeClient(), DynamicRouter(target_model="target"))
     return TestClient(create_app(engine))
 
 
@@ -30,7 +30,8 @@ def test_chat_completion_is_openai_shaped():
     data = resp.json()
     assert data["object"] == "chat.completion"
     assert data["model"] == "target"
-    assert data["choices"][0]["message"] == {"role": "assistant", "content": "The Earth is tilted."}
+    assert data["choices"][0]["message"] == {"role": "assistant", "content": TEXT}
+    assert data["choices"][0]["finish_reason"] == "stop"
     assert data["speculative"]["domain"] == "prose"
     assert data["speculative"]["drafted_tokens"] > 0
     assert "x-process-time-ms" in resp.headers
@@ -52,6 +53,6 @@ def test_routing_yaml_loads_into_router():
     router = DynamicRouter.from_settings(settings)
     route = router.route(PROMPT)
 
-    assert route.target_model == "qwen2.5:14b"
-    assert route.draft_model == "qwen2.5:0.5b"
+    assert route.target_model == "mlx-community/Qwen2.5-14B-Instruct-4bit"
+    assert route.draft_model == "mlx-community/Qwen2.5-0.5B-Instruct-8bit"
     assert route.k_drafts == 3
