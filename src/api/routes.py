@@ -2,13 +2,15 @@ import time
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from src.api.schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
     ChatMessage,
     Choice,
+    DomainStatus,
+    MetricsResponse,
     ModelCard,
     ModelList,
     SpeculativeInfo,
@@ -58,9 +60,36 @@ async def chat_completions(
         speculative=SpeculativeInfo(
             domain=result.domain,
             draft_model=result.draft_model,
+            k=result.metrics.k,
             accepted_tokens=result.accepted_tokens,
             drafted_tokens=result.drafted_tokens,
             acceptance_rate=result.acceptance_rate,
             cycles=result.cycles,
+            tokens_per_second=result.metrics.tokens_per_second,
+            speedup=result.metrics.speedup,
+            dispatch_latency_ms=result.metrics.dispatch_latency_ms,
         ),
+    )
+
+
+@router.get("/metrics", response_model=MetricsResponse)
+async def metrics(
+    engine: EngineDep, limit: Annotated[int, Query(ge=1, le=1000)] = 200
+) -> MetricsResponse:
+    domains = [
+        DomainStatus(
+            domain=domain,
+            draft_model=engine.router.draft_registry[domain],
+            k=stats.current_k,
+            speculation_enabled=stats.speculation_enabled,
+            acceptance_rate=stats.acceptance_rate if stats.history else None,
+            samples=len(stats.history),
+        )
+        for domain, stats in engine.router.stats.items()
+    ]
+    return MetricsResponse(
+        target_model=engine.router.target_model,
+        baseline_tokens_per_second=engine.metrics.baseline_tps,
+        domains=domains,
+        requests=engine.metrics.recent(limit),
     )

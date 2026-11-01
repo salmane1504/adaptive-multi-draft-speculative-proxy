@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
@@ -20,6 +21,10 @@ class DecodeOutput:
     accepted_tokens: int = 0
     drafted_tokens: int = 0
     cycles: int = 0
+    # Generation phase only (prompt prefill excluded).
+    tokens_per_second: float = 0.0
+    # Mean wall time of one target forward pass, from dispatch to result.
+    dispatch_latency_ms: float = 0.0
 
 
 def target_decode(
@@ -32,17 +37,33 @@ def target_decode(
 ) -> DecodeOutput:
     """Plain autoregressive decoding, used when speculation is bypassed."""
     tokens: list[int] = []
+    finish: FinishReason = "length"
     steps = generate_step(
         mx.array(prompt, mx.uint32),
         model,
         max_tokens=max_tokens,
         sampler=make_sampler(temp=temperature),
     )
+    first_at = 0.0
+    passes = 0
     for token, _ in steps:
+        if passes == 0:
+            first_at = time.perf_counter()
+        passes += 1
         if token in eos_ids:
-            return DecodeOutput(tokens, "stop")
+            finish = "stop"
+            break
         tokens.append(cast(int, token))
-    return DecodeOutput(tokens, "length")
+
+    # The first token comes out of prefill, so time is measured from it.
+    elapsed = time.perf_counter() - first_at
+    timed = passes - 1
+    return DecodeOutput(
+        tokens,
+        finish,
+        tokens_per_second=timed / elapsed if timed > 0 else 0.0,
+        dispatch_latency_ms=elapsed / timed * 1000 if timed > 0 else 0.0,
+    )
 
 
 def speculative_decode(
@@ -64,25 +85,37 @@ def speculative_decode(
     draft_in = _prefill(draft, draft_cache, prompt_arr)
 
     tokens: list[int] = []
+    finish: FinishReason = "length"
     accepted = drafted = cycles = 0
+    verify_seconds = 0.0
+    decode_start = time.perf_counter()
     while True:
         n = min(num_draft_tokens, max_tokens - len(tokens))
         draft_tokens, draft_probs = _draft(draft, draft_cache, draft_in, n, temperature)
+        mx.eval(draft_tokens, draft_probs)
+
+        dispatched = time.perf_counter()
         logits = target(mx.concatenate([target_in, draft_tokens])[None], cache=target_cache)
         target_probs = to_probs(logits[0, -(n + 1) :], temperature)
-
         num_accepted, next_token = verify(draft_tokens, draft_probs, target_probs)
+        verify_seconds += time.perf_counter() - dispatched
+
         drafted_list = cast(list[int], draft_tokens.tolist())
         accepted += num_accepted
         drafted += n
         cycles += 1
 
+        done = False
         for token in [*drafted_list[:num_accepted], next_token]:
             if token in eos_ids:
-                return DecodeOutput(tokens, "stop", accepted, drafted, cycles)
+                finish, done = "stop", True
+                break
             tokens.append(token)
             if len(tokens) == max_tokens:
-                return DecodeOutput(tokens, "length", accepted, drafted, cycles)
+                done = True
+                break
+        if done:
+            break
 
         # Target saw [last, d_0..d_{n-1}]; draft saw [last, d_0..d_{n-2}].
         trim_prompt_cache(target_cache, n - num_accepted)
@@ -92,6 +125,17 @@ def speculative_decode(
         else:
             trim_prompt_cache(draft_cache, n - num_accepted - 1)
             draft_in = mx.array([next_token], mx.uint32)
+
+    elapsed = time.perf_counter() - decode_start
+    return DecodeOutput(
+        tokens,
+        finish,
+        accepted,
+        drafted,
+        cycles,
+        tokens_per_second=len(tokens) / elapsed if elapsed > 0 else 0.0,
+        dispatch_latency_ms=verify_seconds / cycles * 1000,
+    )
 
 
 def _prefill(model: Any, cache: list[Any], tokens: mx.array) -> mx.array:

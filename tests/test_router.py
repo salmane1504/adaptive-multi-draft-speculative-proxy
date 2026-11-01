@@ -85,3 +85,25 @@ def test_zero_drafted_tokens_do_not_change_domain_stats(router):
 
 	assert not stats.history
 	assert stats.current_k == 5
+
+
+@pytest.mark.parametrize(
+	("accepted", "drafted", "expected_k"),
+	[(7, 10, 6), (6, 10, 5), (35, 100, 5), (34, 100, 4)],
+)
+def test_step_controller_thresholds(router, accepted, drafted, expected_k):
+	# alpha > 0.6 -> K+1, alpha < 0.35 -> K-1, otherwise hold.
+	router.record_execution_feedback(Domain.CODE, accepted_tokens=accepted, drafted_tokens=drafted)
+
+	assert router.stats[Domain.CODE].current_k == expected_k
+
+
+def test_controller_clamps_k_between_zero_and_eight(router):
+	for _ in range(10):
+		router.record_execution_feedback(Domain.CODE, accepted_tokens=10, drafted_tokens=10)
+	assert router.stats[Domain.CODE].current_k == 8
+
+	for _ in range(60):
+		router.record_execution_feedback(Domain.JSON, accepted_tokens=3, drafted_tokens=10)
+	assert router.stats[Domain.JSON].current_k == 0
+	assert router.stats[Domain.JSON].speculation_enabled is False

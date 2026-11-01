@@ -25,6 +25,8 @@ class Completion:
     accepted_tokens: int
     drafted_tokens: int
     cycles: int
+    tokens_per_second: float
+    dispatch_latency_ms: float
 
 
 class MLXClient:
@@ -118,4 +120,6 @@ class MLXClient:
             accepted_tokens=out.accepted_tokens,
             drafted_tokens=out.drafted_tokens,
             cycles=out.cycles,
+            tokens_per_second=out.tokens_per_second,
+            dispatch_latency_ms=out.dispatch_latency_ms,
         )
