@@ -33,8 +33,25 @@ def test_chat_completion_is_openai_shaped():
     assert data["choices"][0]["message"] == {"role": "assistant", "content": TEXT}
     assert data["choices"][0]["finish_reason"] == "stop"
     assert data["speculative"]["domain"] == "prose"
+    assert data["speculative"]["draft_model"] == "mlx-community/Qwen2.5-0.5B-Instruct-8bit"
+    assert data["speculative"]["k"] == 3
     assert data["speculative"]["drafted_tokens"] > 0
     assert "x-process-time-ms" in resp.headers
+
+
+def test_metrics_reports_domains_and_recent_requests():
+    body = {**PROMPT, "temperature": 0.0, "max_tokens": 32}
+    with make_client() as client:
+        client.post("/v1/chat/completions", json=body)
+        data = client.get("/metrics").json()
+
+    domains = {d["domain"]: d for d in data["domains"]}
+    assert data["target_model"] == "target"
+    assert domains["prose"]["samples"] == 1
+    assert domains["prose"]["acceptance_rate"] == 0.75
+    assert domains["code"]["acceptance_rate"] is None
+    assert [r["domain"] for r in data["requests"]] == ["prose"]
+    assert data["requests"][0]["tokens_per_second"] == 40.0
 
 
 def test_stream_is_rejected():

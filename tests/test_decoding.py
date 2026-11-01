@@ -42,6 +42,8 @@ def test_greedy_speculative_matches_target_only_decoding(k):
     assert out.tokens == reference()
     assert out.finish_reason == "length"
     assert 0 < out.accepted_tokens < out.drafted_tokens
+    assert out.tokens_per_second > 0
+    assert out.dispatch_latency_ms > 0
 
 
 def test_identical_draft_accepts_every_token():

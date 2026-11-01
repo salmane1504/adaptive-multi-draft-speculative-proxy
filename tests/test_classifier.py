@@ -45,6 +45,12 @@ def test_system_message_sets_domain(classifier, system_content, expected):
 	[
 		"Please write a Python function that adds two numbers.",
 		"```sql\nSELECT name FROM users;\n```",
+		"python function",
+		"How do I reverse a list in Python?",
+		"Implement quicksort in Rust",
+		"Write a function that checks if a number is prime",
+		"How do I use pointers in C++?",
+		"import os\nprint(os.getcwd())",
 	],
 )
 def test_code_patterns_classify_code_requests(classifier, content):
@@ -63,9 +69,22 @@ def test_json_text_patterns_classify_structured_output_request(classifier):
 	assert classifier.classify(payload) is Domain.JSON
 
 
-def test_ordinary_request_is_classified_as_prose(classifier):
-	payload = {
-		"messages": [{"role": "user", "content": "Explain why leaves change color."}]
-	}
+def test_single_json_mention_is_classified_as_json(classifier):
+	payload = {"messages": [{"role": "user", "content": "Return a JSON object with name and age"}]}
+
+	assert classifier.classify(payload) is Domain.JSON
+
+
+@pytest.mark.parametrize(
+	"content",
+	[
+		"Explain why leaves change color.",
+		"Explain the function of the liver",
+		"What did the class learn about history?",
+		"Answer if possible: who won in 1998?",
+	],
+)
+def test_ordinary_requests_are_classified_as_prose(classifier, content):
+	payload = {"messages": [{"role": "user", "content": content}]}
 
 	assert classifier.classify(payload) is Domain.PROSE

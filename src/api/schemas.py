@@ -3,6 +3,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from src.core.classifier import Domain
+from src.metrics.store import RequestMetrics
 
 
 class ChatMessage(BaseModel):
@@ -29,10 +30,14 @@ class Choice(BaseModel):
 class SpeculativeInfo(BaseModel):
     domain: Domain
     draft_model: str | None
+    k: int
     accepted_tokens: int
     drafted_tokens: int
     acceptance_rate: float
     cycles: int
+    tokens_per_second: float
+    speedup: float | None
+    dispatch_latency_ms: float
 
 
 class ChatCompletionResponse(BaseModel):
@@ -47,9 +52,26 @@ class ChatCompletionResponse(BaseModel):
 class ModelCard(BaseModel):
     id: str
     object: Literal["model"] = "model"
-    owned_by: str = "ollama"
+    owned_by: str = "mlx"
 
 
 class ModelList(BaseModel):
     object: Literal["list"] = "list"
     data: list[ModelCard]
+
+
+class DomainStatus(BaseModel):
+    domain: Domain
+    draft_model: str
+    k: int
+    speculation_enabled: bool
+    # Mean over the router's sliding window; None until the first speculative request.
+    acceptance_rate: float | None
+    samples: int
+
+
+class MetricsResponse(BaseModel):
+    target_model: str
+    baseline_tokens_per_second: float | None
+    domains: list[DomainStatus]
+    requests: list[RequestMetrics]

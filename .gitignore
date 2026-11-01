@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Dashboard dependencies
+node_modules/
+
 # Local environment variables
 .env
 

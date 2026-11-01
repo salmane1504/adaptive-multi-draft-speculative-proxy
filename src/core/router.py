@@ -51,9 +51,13 @@ class DomainStats:
             return 0.5  # Default baseline assumption
         return sum(self.history) / len(self.history)
 
+    @property
+    def speculation_enabled(self) -> bool:
+        return self.acceptance_rate >= 0.20 and self.current_k > 0
+
     def _adjust_k(self):
         alpha = self.acceptance_rate
-        if alpha >= 0.6:
+        if alpha > 0.6:
             self.current_k = min(self.current_k + 1, 8)  # Cap max depth at 8
         elif alpha < 0.35:
             self.current_k = max(self.current_k - 1, 0)  # Lower depth or disable if overhead > benefit
@@ -94,7 +98,7 @@ class DynamicRouter:
         
         # Bypass speculative decoding if acceptance rate drops critically low (< 0.20)
         # or if K has been adjusted down to 0
-        bypass = (domain_stat.acceptance_rate < 0.20) or (domain_stat.current_k == 0)
+        bypass = not domain_stat.speculation_enabled
 
         return RouteConfig(
             domain=domain,

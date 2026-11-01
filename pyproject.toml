@@ -26,3 +26,11 @@ python_version = "3.12"
 files = ["main.py", "src", "tests"]
 check_untyped_defs = true
 warn_unused_ignores = true
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.3",
+    "types-pyyaml>=6.0.12.20261030",
+]
