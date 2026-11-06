@@ -1,12 +1,13 @@
 import pytest
 
 from src.core.classifier import Domain
-from src.core.router import DynamicRouter
+from src.core.router import RoutingSettings
+from tests.conftest import make_router
 
 
 @pytest.fixture
 def router():
-	return DynamicRouter(target_model="target-model")
+	return make_router("target-model")
 
 
 @pytest.mark.parametrize(
@@ -107,3 +108,12 @@ def test_controller_clamps_k_between_zero_and_eight(router):
 		router.record_execution_feedback(Domain.JSON, accepted_tokens=3, drafted_tokens=10)
 	assert router.stats[Domain.JSON].current_k == 0
 	assert router.stats[Domain.JSON].speculation_enabled is False
+
+def test_initial_k_above_controller_max_is_rejected():
+	data = {
+		"target_model": "t",
+		"controller": {"window_size": 5, "max_k": 4, "increase_above": 0.6, "decrease_below": 0.35, "disable_below": 0.2},
+		"domains": {d.value: {"draft_model": "d", "initial_k": 5} for d in Domain},
+	}
+	with pytest.raises(ValueError, match="max_k"):
+		RoutingSettings.model_validate(data)

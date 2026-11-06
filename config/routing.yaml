@@ -1,5 +1,13 @@
-# MLX models from Hugging Face. Drafts must share the target's tokenizer; initial_k is capped at 8.
+# MLX models from Hugging Face. Drafts must share the target's tokenizer; initial_k is capped at controller.max_k.
 target_model: "mlx-community/Qwen2.5-14B-Instruct-4bit"
+
+# Step controller: alpha is the mean acceptance over the last window_size requests of a domain.
+controller:
+  window_size: 50
+  max_k: 8
+  increase_above: 0.6   # alpha above this -> K+1
+  decrease_below: 0.35  # alpha below this -> K-1
+  disable_below: 0.20   # alpha below this -> bypass speculation
 
 domains:
   code:

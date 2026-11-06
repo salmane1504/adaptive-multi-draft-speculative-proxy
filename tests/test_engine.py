@@ -2,7 +2,7 @@ import asyncio
 
 from src.clients.mlx_client import Completion
 from src.core.engine import SpeculativeEngine
-from src.core.router import DynamicRouter
+from tests.conftest import make_router
 
 PROMPT = {"messages": [{"role": "user", "content": "Explain the seasons."}]}
 TEXT = "The Earth is tilted."
@@ -30,7 +30,7 @@ class FakeClient:
 
 
 def test_speculative_request_uses_routed_draft_and_records_feedback():
-    router = DynamicRouter(target_model="target")
+    router = make_router()
     client = FakeClient()
     engine = SpeculativeEngine(client, router)
     engine.metrics.update_baseline(20.0)
@@ -49,7 +49,7 @@ def test_speculative_request_uses_routed_draft_and_records_feedback():
 
 
 def test_bypass_runs_target_only_and_skips_feedback():
-    router = DynamicRouter(target_model="target")
+    router = make_router()
     router.record_execution_feedback(router.route(PROMPT).domain, 0, 10)
     client = FakeClient()
     engine = SpeculativeEngine(client, router)
@@ -66,7 +66,7 @@ def test_bypass_runs_target_only_and_skips_feedback():
 
 def test_calibrate_warms_each_draft_then_measures_baseline():
     client = FakeClient()
-    engine = SpeculativeEngine(client, DynamicRouter(target_model="target"))
+    engine = SpeculativeEngine(client, make_router())
 
     asyncio.run(engine.calibrate())
 

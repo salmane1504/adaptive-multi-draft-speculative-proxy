@@ -3,11 +3,12 @@ from fastapi.testclient import TestClient
 from src.api.main import create_app
 from src.core.engine import SpeculativeEngine
 from src.core.router import DynamicRouter, RoutingSettings
+from tests.conftest import make_router
 from tests.test_engine import PROMPT, TEXT, FakeClient
 
 
 def make_client() -> TestClient:
-    engine = SpeculativeEngine(FakeClient(), DynamicRouter(target_model="target"))
+    engine = SpeculativeEngine(FakeClient(), make_router())
     return TestClient(create_app(engine))
 
 
