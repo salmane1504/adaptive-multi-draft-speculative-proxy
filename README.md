@@ -37,10 +37,12 @@ To work on the dashboard with hot reload, keep the server running and in a secon
 
 ## Adaptive K (step controller)
 
-After each speculative request, the domain's acceptance rate `α` (mean over the last 50 requests) drives `K`:
+After each speculative request, the domain's acceptance rate `α` (mean over the last `window_size` requests) drives `K`. Defaults below are set under `controller:` in `config/routing.yaml`:
 
-- `α > 0.6` → `K = min(K + 1, 8)`
-- `α < 0.35` → `K = max(K - 1, 0)`; `K = 0` disables speculation for that domain
+- `α > 0.6` (`increase_above`) → `K = min(K + 1, max_k)`, with `max_k = 8`
+- `α < 0.35` (`decrease_below`) → `K = max(K - 1, 0)`; `K = 0` disables speculation for that domain
+- `α < 0.20` (`disable_below`) → speculation is bypassed
+- `window_size` is 50
 
 ## Metrics
 
