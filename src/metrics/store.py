@@ -1,9 +1,13 @@
+import logging
 import time
 from collections import deque
+from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from src.core.classifier import Domain
+
+logger = logging.getLogger(__name__)
 
 
 class RequestMetrics(BaseModel):
@@ -20,12 +24,40 @@ class RequestMetrics(BaseModel):
 
 
 class MetricsStore:
-    """In-memory ring buffer of per-request metrics plus a target-only tok/s baseline."""
+    """Ring buffer of per-request metrics plus a target-only tok/s baseline.
 
-    def __init__(self, capacity: int = 1000, smoothing: float = 0.3):
+    With `path`, each record is appended to a JSONL file and the buffer is reloaded from it.
+    """
+
+    def __init__(self, capacity: int = 1000, smoothing: float = 0.3, path: Path | None = None):
         self._records: deque[RequestMetrics] = deque(maxlen=capacity)
         self._smoothing = smoothing
+        self._path = path
         self.baseline_tps: float | None = None
+        if path is not None:
+            self._load(path)
+
+    def _load(self, path: Path) -> None:
+        if not path.is_file():
+            return
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    self._records.append(RequestMetrics.model_validate_json(line))
+                except ValidationError:
+                    logger.warning("Skipping malformed metrics line in %s", path)
+
+    def _append(self, metrics: RequestMetrics) -> None:
+        if self._path is None:
+            return
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            with self._path.open("a", encoding="utf-8") as f:
+                f.write(metrics.model_dump_json() + "\n")
+        except OSError:
+            logger.warning("Could not write metrics to %s", self._path, exc_info=True)
 
     def update_baseline(self, tokens_per_second: float) -> None:
         if tokens_per_second <= 0:
@@ -61,6 +93,7 @@ class MetricsStore:
             dispatch_latency_ms=dispatch_latency_ms,
         )
         self._records.append(metrics)
+        self._append(metrics)
         return metrics
 
     def recent(self, limit: int) -> list[RequestMetrics]:

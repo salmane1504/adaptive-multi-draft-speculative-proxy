@@ -46,7 +46,9 @@ After each speculative request, the domain's acceptance rate `α` (mean over the
 
 ## Metrics
 
-An in-memory ring buffer (last 1000 requests, lost on restart) stores, per request: domain, draft model, `K`, acceptance rate, speculative tok/s, baseline tok/s, speedup, and dispatch latency. Tok/s covers the generation phase only (prompt prefill excluded). Dispatch latency is the mean wall time of one target forward pass. The baseline is updated by every target-only request.
+An in-memory ring buffer (last 1000 requests) stores, per request: domain, draft model, `K`, acceptance rate, speculative tok/s, baseline tok/s, speedup, and dispatch latency. Tok/s covers the generation phase only (prompt prefill excluded). Dispatch latency is the mean wall time of one target forward pass. The baseline is updated by every target-only request.
+
+Every record is also appended to a JSONL file (`data/metrics.jsonl`, override with `METRICS_LOG`) and the buffer is reloaded from it on startup, so history survives restarts and can be analysed offline. The baseline is not persisted; it is re-measured at calibration.
 
 ## Endpoints
 

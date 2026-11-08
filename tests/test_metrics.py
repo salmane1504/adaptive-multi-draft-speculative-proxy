@@ -43,3 +43,25 @@ def test_baseline_is_smoothed_and_ignores_empty_runs():
     store.update_baseline(30.0)
 
     assert store.baseline_tps == pytest.approx(25.0)
+
+
+def test_records_persist_to_jsonl_and_reload(tmp_path):
+    path = tmp_path / "nested" / "metrics.jsonl"
+    store = MetricsStore(path=path)
+    for tps in [1.0, 2.0, 3.0]:
+        record(store, tps)
+
+    assert len(path.read_text().splitlines()) == 3
+
+    reloaded = MetricsStore(capacity=2, path=path)
+    assert [m.tokens_per_second for m in reloaded.recent(10)] == [2.0, 3.0]
+
+
+def test_reload_skips_malformed_lines(tmp_path):
+    path = tmp_path / "metrics.jsonl"
+    store = MetricsStore(path=path)
+    record(store)
+    with path.open("a") as f:
+        f.write("not json\n\n")
+
+    assert len(MetricsStore(path=path).recent(10)) == 1

@@ -15,6 +15,9 @@ node_modules/
 # Local environment variables
 .env
 
+# Persisted request metrics
+data/
+
 # Tool caches
 .mypy_cache/
 .pytest_cache/
