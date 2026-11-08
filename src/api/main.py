@@ -15,6 +15,7 @@ from src.api.routes import router
 from src.clients.mlx_client import MLXClient
 from src.core.engine import SpeculativeEngine
 from src.core.router import DynamicRouter, RoutingSettings
+from src.metrics.store import MetricsStore
 
 load_dotenv()
 
@@ -32,6 +33,7 @@ class _SkipMetricsPolling(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(_SkipMetricsPolling())
 
 DEFAULT_ROUTING_CONFIG = "config/routing.yaml"
+DEFAULT_METRICS_LOG = "data/metrics.jsonl"
 DASHBOARD_DIST = Path("dashboard/dist")
 
 
@@ -50,7 +52,11 @@ def create_app(engine: SpeculativeEngine | None = None) -> FastAPI:
                 (d.draft_model for d in settings.domains.values()),
             )
             await client.load()
-            app.state.engine = SpeculativeEngine(client, DynamicRouter.from_settings(settings))
+            app.state.engine = SpeculativeEngine(
+                client,
+                DynamicRouter.from_settings(settings),
+                MetricsStore(path=Path(os.getenv("METRICS_LOG", DEFAULT_METRICS_LOG))),
+            )
             await app.state.engine.calibrate()
         else:
             app.state.engine = engine
